@@ -8,8 +8,6 @@ Basta copiar cada seção para o respectivo serviço na pasta correta e preenche
 ```env
 ## analytics-service
 PORT=8005
-
-# --- Configuração da AWS ---
 AWS_SQS_URL=
 AWS_DYNAMODB_TABLE=ToggleMasterAnalytics
 AWS_REGION=us-east-1
