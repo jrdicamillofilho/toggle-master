@@ -1,0 +1,280 @@
+version: "3.9"
+
+services:
+
+  ###########################################################
+  # POSTGRES DO AUTH-SERVICE
+  ###########################################################
+  postgres_auth:
+    image: postgres:16-alpine
+    container_name: auth_service_db_container
+    restart: always
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: auth_service
+    volumes:
+      - pgdata_auth:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 3s
+      timeout: 5s
+      retries: 5
+    networks:
+      - auth_service-network
+
+  initdb_auth:
+    image: postgres:16-alpine
+    container_name: initdb_auth
+    depends_on:
+      postgres_auth:
+        condition: service_healthy
+    env_file:
+      - ./auth-service/.env
+    volumes:
+      - ./auth-service/db:/sql
+    entrypoint: ["/bin/sh", "-c"]
+    command: >
+      "psql postgres://postgres:postgres@postgres_auth:5432/auth_service?sslmode=disable -f /sql/init.sql"
+    networks:
+      - auth_service-network
+
+
+  ###########################################################
+  # POSTGRES DO FLAG-SERVICE
+  ###########################################################
+  postgres_flag:
+    image: postgres:16-alpine
+    container_name: flag_service_db_container
+    restart: always
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: flag_service
+    volumes:
+      - pgdata_flag:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 3s
+      timeout: 5s
+      retries: 5
+    networks:
+      - auth_service-network
+
+  initdb_flag:
+    image: postgres:16-alpine
+    container_name: initdb_flag
+    depends_on:
+      postgres_flag:
+        condition: service_healthy
+    env_file:
+      - ./flag-service/.env
+    volumes:
+      - ./flag-service/db:/sql
+    entrypoint: ["/bin/sh", "-c"]
+    command: >
+      "psql postgres://postgres:postgres@postgres_flag:5432/flag_service?sslmode=disable -f /sql/init.sql"
+    networks:
+      - auth_service-network
+
+
+
+  ###########################################################
+  # POSTGRES DO TARGETING-SERVICE
+  ###########################################################
+  postgres_targeting:
+    image: postgres:16-alpine
+    container_name: targetinng_service_db_container
+    restart: always
+    ports:
+      - "5434:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: targeting_service
+    volumes:
+      - pgdata_targeting:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 3s
+      timeout: 5s
+      retries: 5
+    networks:
+      - auth_service-network
+
+  initdb_targeting:
+    image: postgres:16-alpine
+    container_name: initdb_targeting
+    depends_on:
+      postgres_flag:
+        condition: service_healthy
+    env_file:
+      - ./targeting-service/.env
+    volumes:
+      - ./targeting-service/db:/sql
+    entrypoint: ["/bin/sh", "-c"]
+    command: >
+      "psql postgres://postgres:postgres@postgres_targeting:5432/targeting_service?sslmode=disable -f /sql/init.sql"
+    networks:
+      - auth_service-network
+
+
+  ###########################################################
+  # AUTH-SERVICE
+  ###########################################################
+  auth_service:
+    container_name: auth_service_application_container
+    build:
+      context: ./auth-service
+      dockerfile: Dockerfile
+    ports:
+      - "8001:8001"
+    env_file:
+      - ./auth-service/.env
+    depends_on:
+      postgres_auth:
+        condition: service_healthy
+    networks:
+      - auth_service-network
+
+
+  ###########################################################
+  # FLAG-SERVICE
+  ###########################################################
+  flag_service:
+    container_name: flag_service_application_container
+    build:
+      context: ./flag-service
+      dockerfile: Dockerfile
+    ports:
+      - "8002:8002"
+    env_file:
+      - ./flag-service/.env
+    depends_on:
+      postgres_flag:
+        condition: service_healthy
+      auth_service:
+        condition: service_started
+    networks:
+      - auth_service-network
+
+
+  ###########################################################
+  # TARGETING-SERVICE
+  ###########################################################
+  targeting_service:
+    container_name: targeting_service_application_container
+    build:
+      context: ./targeting-service
+      dockerfile: Dockerfile
+    ports:
+      - "8003:8003"
+    env_file:
+      - ./targeting-service/.env
+    depends_on:
+      postgres_flag:
+        condition: service_healthy
+      auth_service:
+        condition: service_started
+    networks:
+      - auth_service-network
+
+
+  ###########################################################
+  # EVALUATION-SERVICE
+  ###########################################################
+  evaluation_service:
+    container_name: evaluation_service_application_container
+    build:
+      context: ./evaluation-service
+      dockerfile: Dockerfile
+    ports:
+    - "8004:8004"
+    env_file:
+    - ./evaluation-service/.env
+    depends_on:
+      redis:
+        condition: service_healthy
+      auth_service:
+        condition: service_started
+      flag_service:
+        condition: service_started
+      targeting_service:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8004/health || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+    - auth_service-network
+
+
+  ###########################################################
+  # ANALYTICS-SERVICE
+  ###########################################################
+  analytics_service:
+    container_name: analytics_service_application_container
+    build:
+      context: ./analytics-service
+      dockerfile: Dockerfile
+    ports:
+    - "8005:8005"
+    env_file:
+    - ./analytics-service/.env
+    depends_on:
+      redis:
+        condition: service_healthy
+      auth_service:
+        condition: service_started
+      flag_service:
+        condition: service_started
+      targeting_service:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8005/health || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+    - auth_service-network
+      
+
+  ###########################################################
+  # REDIS
+  ###########################################################
+  redis:
+    image: redis:7.2-alpine
+    container_name: redis_container
+    restart: always
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 5s
+      retries: 5
+    networks:
+      - auth_service-network
+
+
+
+###########################################################
+# NETWORKS & VOLUMES
+###########################################################
+networks:
+  auth_service-network:
+    driver: bridge
+
+volumes:
+  pgdata_auth:
+  pgdata_flag:
+  pgdata_targeting:
+  redisdata:
