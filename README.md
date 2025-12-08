@@ -1,7 +1,7 @@
 # Configuração dos `.env` para cada micro-serviço
 
 Abaixo estão todos os arquivos `.env` necessários.  
-Basta copiar cada seção para o respectivo serviço na pasta correta e preencher corretamente as AWS keys e intenal SERVICE_API_KEY (ou MASTER_KEY) baseando-se no README.md de cada microservice.
+Basta copiar cada seção para o respectivo serviço na pasta correta (raiz de cada microservice) e preencher corretamente as AWS keys e intenal SERVICE_API_KEY (ou MASTER_KEY) baseando-se no README.md de cada microservice.
 
 ---
 
